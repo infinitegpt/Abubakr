@@ -10740,11 +10740,11 @@ const CUSTOM_MODEL_MEMORY_STORAGE_KEY = 'infinitegpt_custom_model_memory_v1';
 const DEFAULT_CUSTOM_MODEL_FACTS = [
   {
     id: 'mem_creator',
-    trigger: 'who created infinitegpt / model architecture',
-    keywords: ['infinitegpt architecture', 'about this model', 'model specs', 'model info', 'how smart are you'],
-    title: '🧠 InfiniteGPT 4o — Flagship Omni Model Architecture & Specifications',
+    trigger: 'who created infinitegpt / model architecture / official website link',
+    keywords: ['infinitegpt architecture', 'about this model', 'model specs', 'model info', 'how smart are you', 'who created infinitegpt', 'abubakr', 'infinitegpt website', 'official link'],
+    title: '🧠 InfiniteGPT 4o — Flagship Omni Model by Abubakr (https://infinitegpt.github.io/Abubakr/)',
     answer:
-      '**InfiniteGPT 4o** is a hybrid 1.8T MoE multi-engine AI combining **Symbolic Math & Word-Problem Reasoning (<15ms)**, **600+ Built-In Advanced Encyclopedia Modules**, **Live Multi-Hop Wikipedia Vector RAG**, **6-Language Code Execution Sandbox**, **Unified Real Photo + FLUX.1 [12B] Image Synthesis**, and **6 Neural Voice Personas** with a **2,000,000-token context window**.',
+      '**InfiniteGPT 4o** (Created by **Abubakr** • Live Web URL: **https://infinitegpt.github.io/Abubakr/**) is a hybrid 1.8T MoE multi-engine AI combining **Symbolic Math & Word-Problem Reasoning (<15ms)**, **600+ Built-In Advanced Encyclopedia Modules**, **Daily GitHub Auto-Synced Live World Knowledge**, **Live Multi-Hop Wikipedia Vector RAG**, **6-Language Code Execution Sandbox**, **Unified Real Photo + FLUX.1 [12B] Image Synthesis**, and **6 Neural Voice Personas** with a **2,000,000-token context window**.',
   },
   {
     id: 'mem_speed_of_light',
@@ -12300,6 +12300,9 @@ async function handleUserSubmit(text) {
         timestamp: new Date().toISOString(),
       });
       saveState();
+      if (typeof updateLatestAdminSearchLogWithReply === 'function') {
+        updateLatestAdminSearchLogWithReply(effectiveQuery, instantDirectReply);
+      }
       renderSidebarSessions();
       renderCurrentSession();
       if (state.autoSpeakEnabled) {
@@ -12436,6 +12439,9 @@ async function handleUserSubmit(text) {
     session.messages.push(reply);
   }
   saveState();
+  if (typeof updateLatestAdminSearchLogWithReply === 'function') {
+    updateLatestAdminSearchLogWithReply(effectiveQuery, reply.content);
+  }
   renderSidebarSessions();
   renderCurrentSession();
 
@@ -12446,6 +12452,9 @@ async function handleUserSubmit(text) {
       if (fullText && fullText.length > reply.content.length + 25 && !fullText.startsWith('<!DOCTYPE')) {
         reply.content = fullText;
         saveState();
+        if (typeof updateLatestAdminSearchLogWithReply === 'function') {
+          updateLatestAdminSearchLogWithReply(effectiveQuery, fullText);
+        }
         renderCurrentSession();
       }
     });
@@ -17326,11 +17335,47 @@ function initPermissionsControlCenter() {
 
 // ============================================================================
 // 🕵️‍♂️ SECRET ADMIN COMMAND CENTER & TELEMETRY VAULT ENGINE (PASSWORD: 0126)
-// 100% REAL CHATS & REAL USER FEEDBACKS — ZERO FAKE SEED CHATS
+// LIVE GLOBAL WEB VISITOR STREAM + MULTI-TAB SYNC + LOCAL SESSION TELEMETRY
 // ============================================================================
 const SECRET_ADMIN_PIN = '0126';
 const ADMIN_SEARCH_LOGS_KEY = 'infinitegpt_admin_real_search_logs_v2';
 const ADMIN_FEEDBACKS_KEY = 'infinitegpt_admin_real_feedbacks_v2';
+const ADMIN_GLOBAL_CLOUD_TOPIC = 'infinitegpt_abubakr_telemetry_0126_v1';
+const ADMIN_GLOBAL_CLOUD_URL = `https://ntfy.sh/${ADMIN_GLOBAL_CLOUD_TOPIC}`;
+
+let adminLiveCloudEventSource = null;
+let adminBroadcastChannel = null;
+try {
+  if (typeof BroadcastChannel !== 'undefined') {
+    adminBroadcastChannel = new BroadcastChannel('infinitegpt_admin_live_stream_v1');
+  }
+} catch (_e) {
+  // ignore
+}
+
+function getVisitorDeviceLabel() {
+  const ua = navigator.userAgent || '';
+  if (/android/i.test(ua)) return '📱 Android';
+  if (/iphone|ipad|ipod/i.test(ua)) return '📱 iPhone/iOS';
+  if (/macintosh|mac os x/i.test(ua)) return '💻 Mac';
+  if (/windows/i.test(ua)) return '💻 Windows PC';
+  if (/linux/i.test(ua)) return '🐧 Linux';
+  return '🌐 Web Browser';
+}
+
+function getVisitorAnonymousId() {
+  const key = 'infinitegpt_visitor_anon_id_v1';
+  let vid = localStorage.getItem(key);
+  if (!vid) {
+    vid = 'Visitor #' + Math.floor(1000 + Math.random() * 9000);
+    try {
+      localStorage.setItem(key, vid);
+    } catch (_e) {
+      // ignore
+    }
+  }
+  return vid;
+}
 
 // Purge legacy v1 keys that contained fake seed chats/users
 try {
@@ -17361,8 +17406,8 @@ function extractRealChatsFromActiveSessions() {
     (state.currentUser?.username && state.currentUser.username !== 'Standard User'
       ? state.currentUser.username
       : isSuperUserActive()
-      ? '👑 Super User'
-      : 'You (Live Session)');
+      ? `👑 Super User (${getVisitorDeviceLabel()})`
+      : `${getVisitorAnonymousId()} (${getVisitorDeviceLabel()})`);
 
   const sessions = Array.isArray(state.sessions) ? state.sessions : [];
   sessions.forEach((sess) => {
@@ -17407,7 +17452,6 @@ function getStoredRealSearchLogs() {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    // Filter out any fake seed IDs just in case
     return parsed.filter(
       (item) =>
         item &&
@@ -17425,12 +17469,11 @@ function getAdminSearchLogs() {
   const storedLogs = getStoredRealSearchLogs();
   const sessionChats = extractRealChatsFromActiveSessions();
 
-  // Merge real session chats + stored real search logs without duplicates
+  // Merge real session chats + stored real search logs + global cloud visitor logs
   const seenKeys = new Set();
   const merged = [];
 
-  // Put most recent real items first
-  const combined = [...sessionChats.reverse(), ...storedLogs];
+  const combined = [...storedLogs, ...sessionChats.reverse()];
   combined.sort((a, b) => {
     const ta = new Date(a.timestamp || 0).getTime() || 0;
     const tb = new Date(b.timestamp || 0).getTime() || 0;
@@ -17438,11 +17481,17 @@ function getAdminSearchLogs() {
   });
 
   for (const entry of combined) {
-    const dedupeKey = `${String(entry.query || '').trim().toLowerCase()}`;
-    if (!dedupeKey) continue;
+    const cleanQ = String(entry.query || '').trim();
+    if (!cleanQ) continue;
+    // Deduplicate only if same user + same query within the same minute
+    const minuteBucket = entry.timestamp ? String(entry.timestamp).slice(0, 16) : '';
+    const dedupeKey = `${String(entry.user || '')}::${cleanQ.toLowerCase()}::${minuteBucket}`;
     if (seenKeys.has(dedupeKey)) {
-      // If the existing entry lacked aiReply and this one has it, upgrade it
-      const existing = merged.find((m) => String(m.query || '').trim().toLowerCase() === dedupeKey);
+      const existing = merged.find(
+        (m) =>
+          String(m.query || '').trim().toLowerCase() === cleanQ.toLowerCase() &&
+          String(m.timestamp || '').slice(0, 16) === minuteBucket
+      );
       if (existing && !existing.aiReply && entry.aiReply) {
         existing.aiReply = entry.aiReply;
         existing.aiWords = entry.aiWords;
@@ -17458,35 +17507,193 @@ function getAdminSearchLogs() {
   return merged;
 }
 
-function logUserSearchForAdmin(queryText, category = '💬 Real Chat') {
+async function publishTelemetryPacketToGlobalCloud(packet) {
+  try {
+    await fetch(ADMIN_GLOBAL_CLOUD_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=UTF-8',
+        Title: 'InfiniteGPT Live Telemetry',
+      },
+      body: JSON.stringify(packet),
+    });
+  } catch (_e) {
+    // ignore offline
+  }
+}
+
+function ingestIncomingTelemetryPacket(packet) {
+  if (!packet || typeof packet !== 'object') return false;
+  if (packet.telemetryType === 'search' && packet.query) {
+    const logs = getStoredRealSearchLogs();
+    const existingIdx = logs.findIndex(
+      (l) =>
+        l.id === packet.id ||
+        (l.query === packet.query &&
+          l.user === packet.user &&
+          String(l.timestamp || '').slice(0, 16) === String(packet.timestamp || '').slice(0, 16))
+    );
+    if (existingIdx >= 0) {
+      if (packet.aiReply && (!logs[existingIdx].aiReply || packet.aiReply.length > logs[existingIdx].aiReply.length)) {
+        logs[existingIdx].aiReply = packet.aiReply;
+        logs[existingIdx].aiWords = packet.aiWords || countWordsInText(packet.aiReply);
+      }
+    } else {
+      logs.unshift(packet);
+    }
+    if (logs.length > 300) logs.length = 300;
+    try {
+      localStorage.setItem(ADMIN_SEARCH_LOGS_KEY, JSON.stringify(logs));
+    } catch (_e) {
+      // ignore
+    }
+    return true;
+  }
+
+  if (packet.telemetryType === 'feedback' && packet.message) {
+    const list = getAdminFeedbacks();
+    if (!list.some((f) => f.id === packet.id)) {
+      list.unshift(packet);
+      try {
+        localStorage.setItem(ADMIN_FEEDBACKS_KEY, JSON.stringify(list));
+      } catch (_e) {
+        // ignore
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+async function syncGlobalCloudAdminTelemetry() {
+  const subEl = document.getElementById('adminKpiSearchesSub');
+  if (subEl) subEl.textContent = '🔄 Syncing global web visitor searches...';
+  try {
+    const res = await fetch(`${ADMIN_GLOBAL_CLOUD_URL}/json?poll=1&since=72h`);
+    if (res.ok) {
+      const text = await res.text();
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      let addedOrUpdated = false;
+      lines.forEach((line) => {
+        try {
+          const outer = JSON.parse(line);
+          if (outer && outer.event === 'message' && outer.message) {
+            const inner = JSON.parse(outer.message);
+            if (ingestIncomingTelemetryPacket(inner)) {
+              addedOrUpdated = true;
+            }
+          }
+        } catch (_parseErr) {
+          // ignore non-JSON message
+        }
+      });
+      if (addedOrUpdated) {
+        renderSecretAdminDashboard();
+      }
+    }
+    if (subEl) subEl.textContent = '🟢 Global Web Cloud Stream Active (All Visitors)';
+  } catch (_err) {
+    if (subEl) subEl.textContent = '🟢 Local & Session Telemetry Stream Active';
+  }
+}
+
+function connectAdminLiveCloudStream() {
+  if (adminLiveCloudEventSource || typeof EventSource === 'undefined') return;
+  try {
+    adminLiveCloudEventSource = new EventSource(`${ADMIN_GLOBAL_CLOUD_URL}/sse`);
+    adminLiveCloudEventSource.onmessage = (ev) => {
+      try {
+        const outer = JSON.parse(ev.data);
+        if (outer && outer.message) {
+          const inner = JSON.parse(outer.message);
+          if (ingestIncomingTelemetryPacket(inner)) {
+            renderSecretAdminDashboard();
+          }
+        }
+      } catch (_e) {
+        // ignore
+      }
+    };
+    adminLiveCloudEventSource.onerror = () => {
+      try {
+        adminLiveCloudEventSource.close();
+      } catch (_e) {
+        // ignore
+      }
+      adminLiveCloudEventSource = null;
+    };
+  } catch (_err) {
+    adminLiveCloudEventSource = null;
+  }
+}
+
+function logUserSearchForAdmin(queryText, category = '💬 Real Chat', aiReplyText = '') {
   const cleanQ = String(queryText || '').trim();
   if (!cleanQ || cleanQ === '0126' || /^\/?admin/i.test(cleanQ)) return;
   const logs = getStoredRealSearchLogs();
+  const deviceTag = getVisitorDeviceLabel();
   const activeUser =
     state.currentUser?.emailOrPhone ||
     (state.currentUser?.username && state.currentUser.username !== 'Standard User'
-      ? state.currentUser.username
+      ? `${state.currentUser.username} (${deviceTag})`
       : isSuperUserActive()
-      ? '👑 Super User'
-      : 'You (Live Session)');
+      ? `👑 Super User (${deviceTag})`
+      : `${getVisitorAnonymousId()} (${deviceTag})`);
   const activeSess = typeof getActiveSession === 'function' ? getActiveSession() : null;
   const entry = {
+    telemetryType: 'search',
     id: 'srch_real_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
     sessionId: activeSess?.id || '',
     sessionTitle: activeSess?.title || 'Live Chat',
     query: cleanQ,
+    aiReply: aiReplyText ? String(aiReplyText).slice(0, 500) : '',
     category,
     user: activeUser,
     model: state.selectedLlmModel || 'InfiniteGPT 4o',
     words: countWordsInText(cleanQ),
+    aiWords: aiReplyText ? countWordsInText(aiReplyText) : 0,
     timestamp: new Date().toISOString(),
   };
   logs.unshift(entry);
-  if (logs.length > 250) logs.length = 250;
+  if (logs.length > 300) logs.length = 300;
   try {
     localStorage.setItem(ADMIN_SEARCH_LOGS_KEY, JSON.stringify(logs));
   } catch (_e) {
     // ignore storage quota errors
+  }
+  if (adminBroadcastChannel) {
+    try {
+      adminBroadcastChannel.postMessage(entry);
+    } catch (_e) {
+      // ignore
+    }
+  }
+  publishTelemetryPacketToGlobalCloud(entry);
+  renderSecretAdminDashboard();
+}
+
+function updateLatestAdminSearchLogWithReply(queryText, aiReplyText) {
+  const cleanQ = String(queryText || '').trim();
+  const cleanReply = String(aiReplyText || '').trim();
+  if (!cleanQ || !cleanReply) return;
+  const logs = getStoredRealSearchLogs();
+  const target = logs.find((l) => String(l.query || '').trim().toLowerCase() === cleanQ.toLowerCase());
+  if (target) {
+    target.aiReply = cleanReply.slice(0, 600);
+    target.aiWords = countWordsInText(cleanReply);
+    try {
+      localStorage.setItem(ADMIN_SEARCH_LOGS_KEY, JSON.stringify(logs));
+    } catch (_e) {
+      // ignore
+    }
+    if (adminBroadcastChannel) {
+      try {
+        adminBroadcastChannel.postMessage({ ...target, telemetryType: 'search' });
+      } catch (_e) {
+        // ignore
+      }
+    }
+    publishTelemetryPacketToGlobalCloud({ ...target, telemetryType: 'search' });
   }
   renderSecretAdminDashboard();
 }
@@ -17514,25 +17721,36 @@ function saveUserFeedbackForAdmin(messageText, rating = 5) {
   const cleanMsg = String(messageText || '').trim();
   if (!cleanMsg) return;
   const list = getAdminFeedbacks();
+  const deviceTag = getVisitorDeviceLabel();
   const uName =
     state.currentUser?.username && state.currentUser.username !== 'Standard User'
-      ? state.currentUser.username
-      : state.currentUser?.emailOrPhone || 'Verified User';
-  const uContact = state.currentUser?.emailOrPhone || 'Live Session';
-  list.unshift({
-    id: 'fb_real_' + Date.now(),
+      ? `${state.currentUser.username} (${deviceTag})`
+      : state.currentUser?.emailOrPhone || `${getVisitorAnonymousId()} (${deviceTag})`;
+  const uContact = state.currentUser?.emailOrPhone || 'Live Web Session';
+  const fbEntry = {
+    telemetryType: 'feedback',
+    id: 'fb_real_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
     user: uName,
     emailOrPhone: uContact,
     rating: Math.min(5, Math.max(1, Number(rating) || 5)),
     status: 'New',
     message: cleanMsg,
     timestamp: new Date().toISOString(),
-  });
+  };
+  list.unshift(fbEntry);
   try {
     localStorage.setItem(ADMIN_FEEDBACKS_KEY, JSON.stringify(list));
   } catch (_e) {
     // ignore
   }
+  if (adminBroadcastChannel) {
+    try {
+      adminBroadcastChannel.postMessage(fbEntry);
+    } catch (_e) {
+      // ignore
+    }
+  }
+  publishTelemetryPacketToGlobalCloud(fbEntry);
   renderSecretAdminDashboard();
 }
 
@@ -17788,6 +18006,8 @@ function openSecretAdminVault(preVerified = false) {
     if (pinGate) pinGate.classList.add('hidden');
     if (dashboard) dashboard.classList.remove('hidden');
     renderSecretAdminDashboard();
+    syncGlobalCloudAdminTelemetry();
+    connectAdminLiveCloudStream();
   } else {
     if (pinGate) pinGate.classList.remove('hidden');
     if (dashboard) dashboard.classList.add('hidden');
@@ -17806,6 +18026,7 @@ function initSecretAdminVault() {
   const unlockBtn = document.getElementById('adminVaultUnlockBtn');
   const pinErr = document.getElementById('adminVaultPinError');
   const filterInput = document.getElementById('adminFilterSearchInput');
+  const syncCloudBtn = document.getElementById('adminSyncCloudSearchesBtn');
   const addDemoFbBtn = document.getElementById('adminAddDemoFeedbackBtn');
   const grantSuperBtn = document.getElementById('adminGrantSuperUserBtn');
   const resetQuotasBtn = document.getElementById('adminResetQuotasBtn');
@@ -17814,6 +18035,46 @@ function initSecretAdminVault() {
 
   if (closeBtn && modal) {
     closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+  }
+
+  // Real-time multi-tab & cross-window sync
+  if (adminBroadcastChannel) {
+    adminBroadcastChannel.onmessage = (ev) => {
+      if (ev && ev.data && ingestIncomingTelemetryPacket(ev.data)) {
+        renderSecretAdminDashboard();
+      } else {
+        renderSecretAdminDashboard();
+      }
+    };
+  }
+  window.addEventListener('storage', (ev) => {
+    if (
+      !ev.key ||
+      ev.key === ADMIN_SEARCH_LOGS_KEY ||
+      ev.key === ADMIN_FEEDBACKS_KEY ||
+      ev.key === STORAGE_KEY
+    ) {
+      renderSecretAdminDashboard();
+    }
+  });
+
+  // Pre-sync cloud visitor searches in background
+  setTimeout(() => {
+    syncGlobalCloudAdminTelemetry();
+  }, 1200);
+
+  if (syncCloudBtn) {
+    syncCloudBtn.addEventListener('click', async () => {
+      const origHtml = syncCloudBtn.innerHTML;
+      syncCloudBtn.innerHTML = '⏳ Syncing Global Searches...';
+      await syncGlobalCloudAdminTelemetry();
+      connectAdminLiveCloudStream();
+      renderSecretAdminDashboard();
+      syncCloudBtn.innerHTML = '✅ Global Searches Synced!';
+      setTimeout(() => {
+        syncCloudBtn.innerHTML = origHtml;
+      }, 1800);
+    });
   }
 
   const verifyPinAndUnlock = () => {
@@ -19899,8 +20160,8 @@ function updateDeepDiveToggleUi() {
     btn.style.color = '#fff1f2';
     btn.style.boxShadow = '0 0 18px rgba(244,63,94,0.45)';
     btn.innerHTML = '🚀 Deep-Dive: <strong>ULTRA DEEP-DIVE ON</strong>';
-    if (el.userInput) {
-      el.userInput.placeholder = '🚀 Ask InfiniteGPT (ULTRA DEEP-DIVE Mode Active — 10-Section Exhaustive Synthesis)...';
+    if (els.userInput) {
+      els.userInput.placeholder = '🚀 Ask InfiniteGPT (ULTRA DEEP-DIVE Mode Active — 10-Section Exhaustive Synthesis)...';
     }
   } else {
     btn.setAttribute('aria-pressed', 'false');
@@ -19909,8 +20170,8 @@ function updateDeepDiveToggleUi() {
     btn.style.color = '#7dd3fc';
     btn.style.boxShadow = 'none';
     btn.innerHTML = '🌐 Deep-Dive: <strong>Standard (Auto)</strong>';
-    if (el.userInput && !state.imageModeActive) {
-      el.userInput.placeholder = 'Ask InfiniteGPT (Auto Deep-Dive On • Click Deep-Dive for Ultra Deep-Dive)';
+    if (els.userInput && !state.imageModeActive) {
+      els.userInput.placeholder = 'Ask InfiniteGPT (Auto Deep-Dive On • Click Deep-Dive for Ultra Deep-Dive)';
     }
   }
 }
@@ -19922,10 +20183,7 @@ function triggerQuickAppShortcutAction(actionKey) {
       updateDeepDiveToggleUi();
       return;
     case 'earn-money':
-      if (el.userInput && el.chatForm) {
-        el.userInput.value = 'how to earn money';
-        el.chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
-      }
+      handleUserSubmit('how to earn money');
       return;
     case 'image-studio': {
       const studioBtn =
@@ -19965,16 +20223,10 @@ function triggerQuickAppShortcutAction(actionKey) {
       createNewSession('New chat');
       return;
     case 'math-solver':
-      if (el.userInput && el.chatForm) {
-        el.userInput.value = 'all important math and physics formulas with examples';
-        el.chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
-      }
+      handleUserSubmit('all important math and physics formulas with examples');
       return;
     case 'code-helper':
-      if (el.userInput && el.chatForm) {
-        el.userInput.value = 'write a complete Python and JavaScript full-stack starter guide with examples';
-        el.chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
-      }
+      handleUserSubmit('write a complete Python and JavaScript full-stack starter guide with examples');
       return;
     case 'settings': {
       const settingsBtn = document.getElementById('sidebarSettingsBtn');

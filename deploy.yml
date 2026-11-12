@@ -26,8 +26,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Auto-fix folder structure if uploaded inside a subfolder or zip
+        run: |
+          if [ ! -f "index.html" ] && [ -f "ai-learnmate/index.html" ]; then
+            echo "Found index.html inside ai-learnmate/ subfolder — moving to root..."
+            cp -r ai-learnmate/* .
+          fi
+          if [ ! -f "index.html" ]; then
+            ZIP_FILE=$(find . -maxdepth 1 -name "*.zip" | head -n 1)
+            if [ -n "$ZIP_FILE" ]; then
+              echo "Extracting $ZIP_FILE..."
+              unzip -o "$ZIP_FILE" -d .
+              if [ ! -f "index.html" ] && [ -f "ai-learnmate/index.html" ]; then
+                cp -r ai-learnmate/* .
+              fi
+            fi
+          fi
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Upload static site artifact
         uses: actions/upload-pages-artifact@v3
