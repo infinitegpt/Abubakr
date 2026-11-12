@@ -1,0 +1,13 @@
+# OS & Editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Node / Build / Env files (never commit secret API keys)
+node_modules/
+.env
+.env.local
+.vercel/
+.wrangler/
